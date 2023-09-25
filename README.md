@@ -1,2 +1,2 @@
-# TM-code
-A QR code alternative
+# dml
+A haskell library for doing discrete mathematics

@@ -16,7 +16,7 @@ def convert_int_to_symbol_string(n: int, maximum: int, base: int = 2) -> ArrayLi
     return symbol_string
 
 
-def construct_locator_with_information(error_correction_level: int,  mask: int, color_idx: int, locator_size: int):
+def construct_locator_with_information(error_correction_level: int,  mask: int, locator_size: int):
     """Constructs each locator and adds the information"""
     if locator_size < 5:
         raise ValueError(f"Expected locator size to be >= 5, got {locator_size}")
@@ -28,22 +28,21 @@ def construct_locator_with_information(error_correction_level: int,  mask: int, 
     locator_with_information[:locator_size, :locator_size] = locator
 
     # Error and masking information
-    locator_with_information[locator_size + 1, :2] = convert_int_to_symbol_string(color_idx, 4) # Could perhaps encode: 2, 5, 8, 16 or maybe switch 5 with 4?
-    locator_with_information[locator_size + 1, 2:4] = convert_int_to_symbol_string(error_correction_level, 4) # NOTE: is encoded using two bits
-    locator_with_information[locator_size + 1, 4:6] = convert_int_to_symbol_string(mask, 4)
+    locator_with_information[locator_size + 1, 0] = error_correction_level # NOTE: is encoded using two bits
+    locator_with_information[locator_size + 1, 1:3] = convert_int_to_symbol_string(mask, 7 ** 2,  base = 7)
+    locator_with_information[locator_size + 1, 3:5] = convert_int_to_symbol_string(0, 4, base = 7) # could include information about the version
+
     return locator_with_information
 
 class QRCode:
 
-    def __init__(self, data: str, k: int = 21, error_correction_level: int = 2, mask: int = 1, number_of_colors: int = 5, locator_size: int = 7):
+    def __init__(self, data: str, k: int = 20, error_correction_level: int = 2, mask: int = 1, base: int = 7, locator_size: int = 5):
         """Construct a QR code (version 1)."""
-        self.matrix = np.random.randint(0, 7, size=(k, k))
+        self.matrix = np.random.randint(0, base, size=(k, k))
         #self.matrix = np.ones(shape=(k, k)) * 2
 
-        color_idx = {2: 0, 5: 1, 8: 2, 16: 3}[number_of_colors] # I know its ugly however we need to encode color as a bit string
-
         # 1. Add locators & seperators
-        locator_with_information = construct_locator_with_information(error_correction_level, mask, color_idx, locator_size)
+        locator_with_information = construct_locator_with_information(error_correction_level, mask, locator_size)
 
         self.matrix[:locator_size + 2, :locator_size + 1] = locator_with_information
         self.matrix[-(locator_size + 1):, :(locator_size + 2)] = np.rot90(locator_with_information)
@@ -51,8 +50,13 @@ class QRCode:
 
         # 2. Add timing pattern
         timing_patterns = [i % 2 for i in range(locator_size + 2, k - (locator_size + 1))]
+        cyclic_pattern = [i % base for i in range(locator_size + 2, k - (locator_size + 1))]
         self.matrix[locator_size - 1, locator_size + 1:-(locator_size + 2)] = timing_patterns
+        self.matrix[locator_size - 2, locator_size + 1:-(locator_size + 2)] = cyclic_pattern
+        self.matrix[locator_size - 3, locator_size + 1:-(locator_size + 2)] = timing_patterns
         self.matrix[(locator_size + 2):-(locator_size + 1), locator_size - 1] = timing_patterns
+        self.matrix[(locator_size + 2):-(locator_size + 1), locator_size - 2] = cyclic_pattern
+        self.matrix[(locator_size + 2):-(locator_size + 1), locator_size - 3] = timing_patterns
 
     def __repr__(self) -> str:
         """Allows us to print a QR code to the terminal."""
@@ -60,7 +64,7 @@ class QRCode:
 
 def repr_matrix(mat: ArrayLike) -> str:
     """Allows us to print a QR style code to the terminal."""
-    color_mapping = {0: Style.RESET_ALL + "  ", 1: Back.WHITE + "  ", 2: Back.YELLOW + "  ", 3: Back.BLUE + "  ", 4: Back.GREEN + "  ", 5: Back.MAGENTA + "  ", 6: Back.RED + "  "}
+    color_mapping = {0: Style.RESET_ALL + "  ", 1: Back.WHITE + "  ", 2: Back.RED + "  ", 3: Back.GREEN + "  ", 4: Back.BLUE + "  ", 5: Back.MAGENTA + "  ", 6: Back.YELLOW + "  "}
     rows = ["".join((color_mapping[cell] for cell in row)) for row in mat]
     buffer = "\n " + f"{Style.RESET_ALL}\n ".join(rows) + f"{Style.RESET_ALL}\n"
 

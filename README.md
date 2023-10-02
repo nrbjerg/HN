@@ -1,2 +1,2 @@
-# TM
+# HN
 A QR code alternative.

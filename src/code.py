@@ -2,6 +2,7 @@
 import galois as gl
 import numpy as np
 from helpers import convert_int_to_symbols, repr_matrix
+from masking import compute_mask, compute_masking_score
 
 class Code:
     """Constructs a HN code."""
@@ -30,6 +31,7 @@ class Code:
         self.add_locator_and_timing_pattern()
         self.add_parameters_and_calibration_colors()
         self.add_data()
+        print(compute_masking_score(self.matrix))
 
     def add_locator_and_timing_pattern(self) -> None:
         """Create a matrix with the locator and timing patterns."""

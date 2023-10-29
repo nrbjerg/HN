@@ -27,13 +27,66 @@ class Code:
         self.encoding = encoding
         self.size = size
 
+        n = self.gf.order
+        self.masks = [
+            self.gf([[(i + j) % n for i in range(self.size + 2)] for j in range(self.size + 2)]),
+            self.gf([[(i * j) % n for i in range(self.size + 2)] for j in range(self.size + 2)]),
+            self.gf([[(i * j - (i + j)) % n for i in range(self.size + 2)] for j in range(self.size + 2)]),
+        ]
+
+        # Compute masking information.
+        self.mask_idx = self._compute_mask()
         self.matrix = self.gf.Ones((self.size + 2, self.size + 2))
-        self.add_locator_and_timing_pattern()
-        self.add_parameters_and_calibration_colors()
-        self.add_data()
+        self._add_data()
+        self.matrix += self.masks[self.mask_idx]
+        self._add_locator_and_timing_pattern()
+        self._add_parameters_and_calibration_colors()
+
+        # Add white where it is needed
+        self.matrix[0, :] = self.gf.Ones((self.size  + 2))
+        self.matrix[self.size + 1, :] = self.gf.Ones((self.size  + 2))
+        self.matrix[:, 0] = self.gf.Ones((self.size  + 2))
+        self.matrix[:, self.size + 1] = self.gf.Ones((self.size  + 2))
+        # Arround the large indicator
+        self.matrix[:, 8] = self.gf.Ones((self.size  + 2))
+        self.matrix[8, :] = self.gf.Ones((self.size  + 2))
+
+
+        # Arround the small indicators
+        self.matrix[6, -7:] = self.gf.Ones((7))
+        self.matrix[-7, :9] = self.gf.Ones((9))
+        self.matrix[:9, -7] = self.gf.Ones((9))
+        self.matrix[-7:, 6] = self.gf.Ones((7))
+
+        # Arrund information patterns
+        self.matrix[9:-7, 5] = self.gf.Ones(self.size - 8 - 6)
+        self.matrix[5, 9:-7] = self.gf.Ones(self.size - 8 - 6)
+
         print(compute_masking_score(self.matrix))
 
-    def add_locator_and_timing_pattern(self) -> None:
+    def _compute_mask(self) -> int:
+        """Compute the best mask (maximizing constrast between neighbouring pixels.)"""
+        best_idx, best_score = 0, np.inf
+        self.matrix = self.gf.Ones((self.size + 2, self.size + 2))
+        for idx, mask in enumerate(self.masks):
+            self._add_data()
+            self.matrix += mask
+            self._add_parameters_and_calibration_colors()
+            self._add_locator_and_timing_pattern()
+
+            if compute_masking_score(self.matrix) < best_score:
+                best_idx = idx
+
+        return best_idx
+
+    def _add_mask(self):
+        """Adds the mask to the data matrix."""
+        mask = self.masks[self.mask_idx]
+
+        mask[:8, :8] = self.gf.Ones((8, 8))
+        print(repr_matrix(mask))
+
+    def _add_locator_and_timing_pattern(self) -> None:
         """Create a matrix with the locator and timing patterns."""
         # 1. Add locators to matrix
         large_locator = self.gf.Zeros((7, 7)) - self.gf(np.pad(self.gf.Ones((5, 5)), 1)) + self.gf(np.pad(self.gf.Ones((3, 3)), 2))
@@ -49,7 +102,7 @@ class Code:
         self.matrix[7, 9:-7] = timing_pattern
         self.matrix[9:-7, 7] = timing_pattern
 
-    def add_parameters_and_calibration_colors(self) -> None:
+    def _add_parameters_and_calibration_colors(self) -> None:
         """Add parameters and calibration colors to the matrix."""
         # 1. Add calibration symbols:
         rgb = self.gf([2, 3, 5])
@@ -70,7 +123,7 @@ class Code:
         for pos in [((6, 6), (10, 11)), ((7, 7), (-5, -6)), ((-9, -10), (6, 6))]:
             self.matrix[pos] = encoding_symbols
 
-    def add_data(self) -> None:
+    def _add_data(self) -> None:
         """Add the data to the matrix."""
         a, b, c = np.split(self.data, [15 * 15, 15 * 15 + 4 * 9])
         self.matrix[-16:-1, -16:-1] = np.reshape(a, (15, 15))
